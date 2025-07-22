@@ -1,0 +1,61 @@
+name: Build EFI bootloader
+
+on:
+  push:
+  repository_dispatch:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+
+    env:
+      EFI_INCLUDE: /usr/include/efi
+      EFI_INCLUDE_ARCH: /usr/include/efi/${{ matrix.arch }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnu-efi build-essential uuid-dev
+
+      - name: Set architecture-specific variables
+        run: |
+          echo "ARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            echo "EFI_TARGET=x86_64-efi" >> $GITHUB_ENV
+            echo "EFI_OUTPUT=BOOTX64.EFI" >> $GITHUB_ENV
+          else
+            echo "EFI_TARGET=arm64-efi" >> $GITHUB_ENV
+            echo "EFI_OUTPUT=BOOTAA64.EFI" >> $GITHUB_ENV
+          fi
+
+      - name: Compile EFI bootloader
+        run: |
+          # Compile
+          ${EFI_TARGET}-gcc -fpic -fshort-wchar -mno-red-zone -Wall \
+            -I $EFI_INCLUDE -I $EFI_INCLUDE_ARCH \
+            -c bootloader.c -o bootloader.o
+
+          # Link
+          ${EFI_TARGET}-ld -nostdlib -znocombreloc \
+            -T /usr/lib/elf_${ARCH}_efi.lds -shared -Bsymbolic \
+            -L /usr/lib -lefi -lgnuefi bootloader.o -o bootloader.so
+
+          # Create EFI executable
+          objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+            -j .rel -j .rela -j .reloc --target=efi-app-${ARCH} \
+            bootloader.so $EFI_OUTPUT
+
+      - name: Upload EFI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.EFI_OUTPUT }}
+          path: ${{ env.EFI_OUTPUT }}
