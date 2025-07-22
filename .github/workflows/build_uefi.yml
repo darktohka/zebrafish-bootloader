@@ -29,7 +29,7 @@ jobs:
           cd /tmp
           curl -SsL https://github.com/rhboot/gnu-efi/archive/refs/heads/master.tar.gz | tar -xz
           cd gnu-efi-master
-          make -j$(nproc) install
+          sudo make -j$(nproc) install
           cp -r inc/aarch64 /usr/local/include/efi/
 
       - name: Set architecture-specific variables
