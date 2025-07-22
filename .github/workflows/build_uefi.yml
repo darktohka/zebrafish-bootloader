@@ -24,6 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+          sudo apt-get -y purge man-db || true
           sudo apt-get install -y curl build-essential uuid-dev gcc-aarch64-linux-gnu
           cd /tmp
           curl -SsL https://github.com/rhboot/gnu-efi/archive/refs/heads/master.tar.gz | tar -xz
