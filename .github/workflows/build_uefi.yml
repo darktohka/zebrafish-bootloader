@@ -14,8 +14,8 @@ jobs:
         arch: [x86_64, aarch64]
 
     env:
-      EFI_INCLUDE: /usr/include/efi
-      EFI_INCLUDE_ARCH: /usr/include/efi/${{ matrix.arch }}
+      EFI_INCLUDE: /usr/local/include/efi
+      EFI_INCLUDE_ARCH: /usr/local/include/efi/${{ matrix.arch }}
 
     steps:
       - name: Checkout code
@@ -24,23 +24,29 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gnu-efi build-essential uuid-dev
+          sudo apt-get install -y curl build-essential uuid-dev gcc-aarch64-linux-gnu
+          mkdir /tmp
+          cd /tmp
+          curl -SsL https://github.com/rhboot/gnu-efi/archive/refs/heads/master.tar.gz | tar -xz
+          cd gnu-efi-master
+          make -j$(nproc) install
+          cp -r inc/aarch64 /usr/local/include/efi/
 
       - name: Set architecture-specific variables
         run: |
           echo "ARCH=${{ matrix.arch }}" >> $GITHUB_ENV
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            echo "EFI_TARGET=x86_64-efi" >> $GITHUB_ENV
+            echo "EFI_TARGET=x86_64-linux-gnu" >> $GITHUB_ENV
             echo "EFI_OUTPUT=BOOTX64.EFI" >> $GITHUB_ENV
           else
-            echo "EFI_TARGET=arm64-efi" >> $GITHUB_ENV
+            echo "EFI_TARGET=aarch64-linux-gnu" >> $GITHUB_ENV
             echo "EFI_OUTPUT=BOOTAA64.EFI" >> $GITHUB_ENV
           fi
 
       - name: Compile EFI bootloader
         run: |
           # Compile
-          ${EFI_TARGET}-gcc -fpic -fshort-wchar -mno-red-zone -Wall \
+          ${EFI_TARGET}-gcc -fpic -fshort-wchar -Wall \
             -I $EFI_INCLUDE -I $EFI_INCLUDE_ARCH \
             -c bootloader.c -o bootloader.o
 
