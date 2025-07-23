@@ -1,0 +1,19 @@
+[package]
+name = "bootloader-rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+uefi = { version = "0", features = ["alloc", "global_allocator", "panic_handler"] }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[profile.release-lto]
+inherits = "release"
+lto = true
+codegen-units = 1
+strip = true

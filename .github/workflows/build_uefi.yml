@@ -9,59 +9,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        arch: [x86_64, aarch64]
-
-    env:
-      EFI_INCLUDE: /usr/local/include/efi
-      EFI_INCLUDE_ARCH: /usr/local/include/efi/${{ matrix.arch }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get -y purge man-db || true
-          sudo apt-get install -y curl build-essential uuid-dev gcc-aarch64-linux-gnu
-          cd /tmp
-          curl -SsL https://github.com/rhboot/gnu-efi/archive/refs/heads/master.tar.gz | tar -xz
-          cd gnu-efi-master
-          sudo make -j$(nproc) install
-          cp -r inc/aarch64 /usr/local/include/efi/
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          target: x86_64-unknown-uefi, aarch64-unknown-uefi
 
-      - name: Set architecture-specific variables
-        run: |
-          echo "ARCH=${{ matrix.arch }}" >> $GITHUB_ENV
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            echo "EFI_TARGET=x86_64-linux-gnu" >> $GITHUB_ENV
-            echo "EFI_OUTPUT=BOOTX64.EFI" >> $GITHUB_ENV
-          else
-            echo "EFI_TARGET=aarch64-linux-gnu" >> $GITHUB_ENV
-            echo "EFI_OUTPUT=BOOTAA64.EFI" >> $GITHUB_ENV
-          fi
+      - name: Build x86_64 UEFI bootloader
+        run: cargo build --profile release-lto --target x86_64-unknown-uefi
 
-      - name: Compile EFI bootloader
-        run: |
-          # Compile
-          ${EFI_TARGET}-gcc -fpic -fshort-wchar -Wall \
-            -I $EFI_INCLUDE -I $EFI_INCLUDE_ARCH \
-            -c bootloader.c -o bootloader.o
+      - name: Build aarch64 UEFI bootloader
+        run: cargo build --profile release-lto --target aarch64-unknown-uefi
 
-          # Link
-          ${EFI_TARGET}-ld -nostdlib -znocombreloc \
-            -T /usr/lib/elf_${ARCH}_efi.lds -shared -Bsymbolic \
-            -L /usr/lib -lefi -lgnuefi bootloader.o -o bootloader.so
-
-          # Create EFI executable
-          objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
-            -j .rel -j .rela -j .reloc --target=efi-app-${ARCH} \
-            bootloader.so $EFI_OUTPUT
-
-      - name: Upload EFI artifacts
+      - name: Upload x86_64 EFI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.EFI_OUTPUT }}
-          path: ${{ env.EFI_OUTPUT }}
+          name: BOOTX64.EFI
+          path: target/x86_64-unknown-uefi/release-lto/bootloader-rust.efi
+
+      - name: Upload aarch64 EFI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOOTAA64.EFI
+          path: target/aarch64-unknown-uefi/release-lto/bootloader-rust.efi
