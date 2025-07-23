@@ -20,19 +20,23 @@ jobs:
           target: x86_64-unknown-uefi, aarch64-unknown-uefi
 
       - name: Build x86_64 UEFI bootloader
-        run: cargo build --profile release-lto --target x86_64-unknown-uefi
+        run: |
+          cargo build --profile release-lto --target x86_64-unknown-uefi
+          mv target/x86_64-unknown-uefi/release-lto/bootloader-rust.efi BOOTX64.EFI
 
       - name: Build aarch64 UEFI bootloader
-        run: cargo build --profile release-lto --target aarch64-unknown-uefi
+        run: |
+          cargo build --profile release-lto --target aarch64-unknown-uefi
+          mv target/aarch64-unknown-uefi/release-lto/bootloader-rust.efi BOOTAA64.EFI
 
       - name: Upload x86_64 EFI artifact
         uses: actions/upload-artifact@v4
         with:
           name: BOOTX64.EFI
-          path: target/x86_64-unknown-uefi/release-lto/bootloader-rust.efi
+          path: BOOTX64.EFI
 
       - name: Upload aarch64 EFI artifact
         uses: actions/upload-artifact@v4
         with:
           name: BOOTAA64.EFI
-          path: target/aarch64-unknown-uefi/release-lto/bootloader-rust.efi
+          path: BOOTAA64.EFI
