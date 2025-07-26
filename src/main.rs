@@ -4,6 +4,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use log::{info, warn};
 use uefi::CStr16;
 use uefi::boot::{LoadImageSource, ScopedProtocol};
 use uefi::prelude::*;
@@ -37,7 +38,10 @@ fn get_shell_app_device_path<'a>(
     builder.finalize().unwrap()
 }
 
-fn get_cmdline(fs: &mut ScopedProtocol<SimpleFileSystem>) -> &CStr16 {
+fn get_cmdline<'a>(
+    fs: &'a mut ScopedProtocol<SimpleFileSystem>,
+    buf16: &'a mut [u16],
+) -> &'a CStr16 {
     // Open the volume
     let mut volume = fs.open_volume().expect("Failed to open volume");
 
@@ -65,21 +69,24 @@ fn get_cmdline(fs: &mut ScopedProtocol<SimpleFileSystem>) -> &CStr16 {
                 .expect("Failed to read cmdline.txt");
 
             if bytes_read == 0 {
+                warn!("cmdline.txt is empty, using fallback command line");
                 FALLBACK_CMDLINE
             } else {
                 buf[bytes_read] = 0; // Null-terminate the buffer
                 buf[bytes_read + 1] = 0; // Ensure the next byte is also null
-                let u16_buf = unsafe {
-                    core::slice::from_raw_parts(buf.as_ptr() as *const u16, bytes_read / 2)
-                };
-                let cstr16_buf =
-                    CStr16::from_u16_with_nul(u16_buf).unwrap_or_else(|_| FALLBACK_CMDLINE);
+                let utf8_str = core::str::from_utf8(&buf[..bytes_read])
+                    .expect("Failed to convert cmdline.txt content to UTF-8 string");
+                let cstr16_buf = CStr16::from_str_with_buf(utf8_str, buf16)
+                    .expect("Failed to convert UTF-8 string to CStr16");
+                info!("Successfully read cmdline.txt");
                 cstr16_buf
             }
         } else {
+            warn!("cmdline.txt is not a regular file, using fallback command line");
             FALLBACK_CMDLINE
         }
     } else {
+        warn!("Failed to open cmdline.txt, using fallback command line");
         FALLBACK_CMDLINE
     }
 }
@@ -88,11 +95,16 @@ fn get_cmdline(fs: &mut ScopedProtocol<SimpleFileSystem>) -> &CStr16 {
 fn main() -> Status {
     uefi::helpers::init().unwrap();
 
+    info!("Zebrafish is booting...");
+
     // Get FileSystem Protocol
     let mut fs = boot::get_image_file_system(boot::image_handle())
         .expect("Failed to get FileSystemProtocol");
 
-    let cmdline_str = get_cmdline(&mut fs);
+    let mut buf16 = [0u16; 16384]; // Allocate a buffer for CStr16
+    let cmdline_str = get_cmdline(&mut fs, &mut buf16);
+
+    info!("Loading kernel...");
 
     // Load the kernel (EFI stub Linux kernel)
     let mut storage = Vec::new();
@@ -113,6 +125,9 @@ fn main() -> Status {
         shell_loaded_image
             .set_load_options(cmdline_str.as_ptr().cast(), cmdline_str.num_bytes() as u32)
     };
+
+    // Debug: Booting kernel
+    info!("Booting kernel...");
 
     // Start the kernel
     boot::start_image(kernel_image_handle).expect("failed to launch the shell app");
