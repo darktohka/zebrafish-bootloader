@@ -32,10 +32,14 @@ fn get_shell_app_device_path<'a>(
             break;
         }
 
-        builder = builder.push(&node).unwrap();
+        builder = builder
+            .push(&node)
+            .expect("Failed to push device path node");
     }
-    builder = builder.push(&build::media::FilePath { path_name }).unwrap();
-    builder.finalize().unwrap()
+    builder = builder
+        .push(&build::media::FilePath { path_name })
+        .expect("Failed to push file path");
+    builder.finalize().expect("Failed to finalize device path")
 }
 
 fn get_cmdline<'a>(
@@ -93,7 +97,7 @@ fn get_cmdline<'a>(
 
 #[entry]
 fn main() -> Status {
-    uefi::helpers::init().unwrap();
+    uefi::helpers::init().expect("msg: Failed to initialize UEFI environment");
 
     info!("Zebrafish is booting...");
 
