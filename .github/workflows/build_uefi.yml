@@ -40,3 +40,22 @@ jobs:
         with:
           name: BOOTAA64.EFI
           path: BOOTAA64.EFI
+
+      - name: Deploy to CDN
+        if: github.ref == 'refs/heads/master'
+        run: |
+          mkdir artifacts
+          mv BOOTX64.EFI artifacts/
+          mv BOOTAA64.EFI artifacts/
+          cat <<EOF > ./rclone.conf
+          [s3]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          endpoint = ${{ secrets.AWS_ENDPOINT_URL }}
+          acl = public-read
+          no_check_bucket = true
+          EOF
+          docker run -v ./rclone.conf:/config/rclone/rclone.conf -v "${{ github.workspace }}/artifacts:/artifacts" rclone/rclone:latest -vv copy /artifacts/ s3:${{ secrets.AWS_BUCKET }}/
+          rm ./rclone.conf
